@@ -92,7 +92,7 @@ walk2(files_csv, names_csv, ~ assign(.y, read_csv(.x,
 
 # set dates
 date_pull <- unique(animals$data_pull_date_max)
-date_start <- date_pull-2000
+date_start <- date_pull-365
 
 animal_lact <- animal_lactations |> 
   filter(lact_number >0) |> 
