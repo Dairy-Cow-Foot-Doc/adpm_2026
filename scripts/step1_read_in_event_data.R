@@ -68,8 +68,10 @@ if ("HERDID" %in% names(events)) {
 } else {
   if (sum(str_detect(events$source_file_path, 'myce.....csv')) > 0) {
     events <<- events %>%
-      mutate(HERDID = paste0('Example Herd ', str_sub(source_file_path, 18, 20)))
-      
+      mutate(
+        HERDID = paste0('Example Herd ', str_sub(source_file_path, 18, 20))
+      )
+
     print('created herd id for example data')
   } else {
     events <<- events %>%
@@ -125,7 +127,7 @@ events <- events |>
   ##add standard event types-----------------
   fxn_assign_event_type() |>
   ##add event location --------------
-  fxn_add_location_event() |>
+  fxn_add_location_event_pen_template() |>
   ##parse remarks and protocols-----------------
   fxn_parse_remark() |>
   fxn_parse_protocols() |>
@@ -201,7 +203,10 @@ events <- events |>
 # write out files-----------------------
 
 # main file ------------
-write_parquet(events, here::here('data/intermediate_files/events_all_columns.parquet')) # this file is for if you wanted to chase a problem between original and formatted file without re-running step1
+write_parquet(
+  events,
+  here::here('data/intermediate_files/events_all_columns.parquet')
+) # this file is for if you wanted to chase a problem between original and formatted file without re-running step1
 
 # formatted file -----------------------
 write_parquet(
