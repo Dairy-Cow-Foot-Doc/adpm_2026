@@ -28,3 +28,15 @@ if (sum(str_detect(production_columns, "LS")) > 0) {
   production <- production %>%
     rename(LGSCC = LS)
 }
+
+# Fat --------------------
+if (sum(str_detect(production_columns, "FAT%")) > 0) {
+  production <- production %>%
+    rename(PCTF = 'FAT%')
+}
+
+# prot Score --------------------
+if (sum(str_detect(production_columns, "PROT%")) > 0) {
+  production <- production %>%
+    rename(PCTP = 'PROT%')
+}

@@ -1,0 +1,281 @@
+---
+title: "Dairy ADPM Files"
+format: html
+execute:
+  echo: false
+  warning: false
+  message: false
+embed-resources: true
+---
+
+This is a document that explains the files use for ADPM dairy data
+exercise. The data is from a real operation but has been processed to
+make things a bit easier. The data was exported from DairyComp software.
+
+-   The graphs are there to show the variable/column name
+
+-   The table below the graphs contain the data and can be downloaded
+    for your use.
+
+```{r}
+#| label: packages
+
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  tidyverse,
+  janitor,
+  arrow,
+  dtplyr,
+  gt,
+  lubridate,
+  quarto, 
+  zoo,
+  tools,
+  skimr,
+  DT
+  )
+
+# load function
+source("functions/fxn_dt_base.R")
+
+# create
+fxn_graph_file_skim<-function(data){
+  
+  sk_df <- skim(data)
+  
+  p<-ggplot(sk_df)+
+  geom_bar(aes(x = skim_variable,
+               y = complete_rate, fill = skim_type), stat = 'identity')+
+  coord_flip()+
+    theme_bw()+
+    labs(x = "variable name",
+         fill = "variable type")+
+    scale_fill_viridis_d()
+  
+  print(p)
+}
+
+```
+
+```{r}
+#| label: import_parquet_files
+
+# this imports all files at once 
+files <- list.files('data/intermediate_files/',
+                          pattern = "\\.parquet$", full.names = TRUE
+                         ) 
+names <- file_path_sans_ext(basename(files))
+
+walk2(files, names, ~ assign(.y, read_parquet(.x), envir = .GlobalEnv))
+
+
+```
+
+```{r}
+#| label: import_csv_files
+
+# this imports all files at once 
+# data source is everag dashboard
+files_csv <- list.files('source_data/feed/',
+                          pattern = "\\.csv$", full.names = TRUE
+                         ) 
+names_csv <- file_path_sans_ext(basename(files_csv))
+
+walk2(files_csv, names_csv, ~ assign(.y, read_csv(.x, 
+                                                  show_col_types = FALSE), envir = .GlobalEnv))
+
+
+```
+
+```{r}
+#| label: parquet_data processing
+
+# set dates
+date_pull <- unique(animals$data_pull_date_max)
+date_start <- date_pull-2000
+
+animal_lact <- animal_lactations |> 
+  filter(lact_number >0) |> 
+  select(id_animal, id_animal_lact, date_fresh,
+         lact_number, lact_group, date_dry) |> 
+  left_join(animals |>  select(id_animal, breed, date_left),
+            by = join_by(id_animal)
+            )
+  
+
+# get last year events
+events_1yr <- events_formatted |> 
+    # remove repro events
+  filter(event_type %in% c("health")) |> 
+  filter(date_event>=date_start) |> 
+  filter(lact_number >0) |> 
+  select(id_animal, id_animal_lact, location_event, lact_number,
+         lact_group_basic, date_archived, date_event, dim_event,
+         date_concieved, date_aborted, date_repro_dx,
+         event, event_type, protocols, remark) 
+
+# sold deads
+culls_1yr <- events_formatted |> 
+    # remove repro events
+  filter(event %in% c("SOLD", 'DIED')) |> 
+  filter(date_event>=date_start) |> 
+  filter(lact_number >0) |> 
+  select(id_animal, id_animal_lact, lact_number,
+         lact_group_basic, date_archived, date_event, dim_event,
+         date_concieved, date_aborted, date_repro_dx,
+         event, event_type, protocols, remark)
+
+
+# get production data
+production_1yr <- production_formatted |> 
+    filter(date_test >= date_start) |>
+  select(-c(source_file_path))
+```
+
+```{r}
+#breeding data
+# raw breeding data
+# breeding data want 1st breeding age and conceived date
+repro <- events_formatted |> 
+  # select repro events
+  filter(event %in% c("BRED")) |> 
+  filter(lact_number >0) |> 
+  select(id_animal, id_animal_lact, date_birth, breed,
+         date_breeding = date_event,
+         event, event_type, breeding_sire = remark, 
+         breeding_result = R, 
+         breeding_technician = T, breeding_code= B, 
+         date_heat, date_concieved, date_aborted, date_repro_dx) |> 
+  distinct() |> 
+   group_by(id_animal_lact) |> 
+  mutate(breeding_count = 1:n(), 
+         breeding_total_count = sum(n()), 
+         date_breeding_last = max(date_breeding),
+         date_breeding_first = min(date_breeding)
+         )|> 
+  slice_max(order_by = breeding_count) |> 
+  ungroup() |> 
+  select(id_animal, id_animal_lact, date_birth, breed, date_breeding_last,
+         breeding_sire, breeding_result, breeding_total_count,
+         breeding_technician, breeding_code, 
+         date_breeding_first,
+         date_concieved, date_aborted, date_repro_dx
+         ) |>
+  # filter last so get right dates for first breeding etc.
+  filter(date_breeding_last >= date_start) |> 
+  # merge to get cow level info back
+  left_join(animal_lact, by = join_by(id_animal, id_animal_lact, breed)) |> 
+  select(id_animal, id_animal_lact, date_birth, date_fresh, 
+         breed, lact_number, lact_group, everything())
+
+
+# # PR tables
+# breeding_1yr <- preg |> 
+#   filter(period_start_date >= date_start) |> 
+#   rename(date_period_start = period_start_date) |> 
+#   select(-ends_with('risk'))
+
+```
+
+
+# Inventory
+
+## Yearly
+
+This table is a summary table that has counts of all the cows that were
+at risk during the past year
+
+```{r}
+
+fxn_graph_file_skim(denominator_by_calendar_time_period)
+
+```
+
+```{r}
+
+fxn_DT_base(denominator_by_calendar_time_period)
+
+```
+
+## by Lactation and DIM periods
+
+```{r}
+
+fxn_graph_file_skim(denominator_by_lact_group_time_period365)
+
+```
+
+```{r}
+
+fxn_DT_base(denominator_by_lact_group_time_period365)
+
+```
+
+# Breeding Data files
+
+These files have all the bred event info for the past year
+
+## Raw breeding data.
+
+```{r}
+
+fxn_graph_file_skim(repro)
+
+```
+
+```{r}
+
+fxn_DT_base(repro)
+
+```
+
+
+# Recorded Health Events
+
+This has all the event data recorded for this dairy
+
+```{r}
+
+fxn_graph_file_skim(events_1yr)
+
+```
+
+```{r}
+
+fxn_DT_base(events_1yr)
+
+```
+
+# Culling Events
+
+This has all the culling data recorded for this dairy
+
+```{r}
+
+fxn_graph_file_skim(culls_1yr)
+
+```
+
+```{r}
+
+fxn_DT_base(culls_1yr)
+
+```
+
+# DHI Data
+
+This table is summary of the all the DHI test data that exists for this
+dairy in the past year
+
+```{r}
+
+fxn_graph_file_skim(production_1yr)
+
+```
+
+```{r}
+
+fxn_DT_base(production_1yr)
+
+```
+

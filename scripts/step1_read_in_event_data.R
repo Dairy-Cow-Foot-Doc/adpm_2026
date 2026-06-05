@@ -127,7 +127,7 @@ events <- events |>
   ##add standard event types-----------------
   fxn_assign_event_type() |>
   ##add event location --------------
-  fxn_add_location_event_pen_template() |>
+  fxn_assign_location_event_pen_template() |>
   ##parse remarks and protocols-----------------
   fxn_parse_remark() |>
   fxn_parse_protocols() |>
